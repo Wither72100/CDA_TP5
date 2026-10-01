@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const Joi = require('joi');
 const app = express();
 const port = 3000;
 
@@ -19,6 +20,16 @@ const pool = new Pool({
     database: process.env.DB_NAME
 });
 
+const createSchema = Joi.object({
+    title: Joi.string().trim().min(1).max(255).required(),
+    isCompleted: Joi.boolean()
+});
+
+const updateSchema = Joi.object({
+    title: Joi.string().trim().min(1).max(255),
+    isCompleted: Joi.boolean()
+}).min(1);
+
 app.get('/', (req, res) => {
     res.json({
         message: "bravo"
@@ -26,13 +37,15 @@ app.get('/', (req, res) => {
 });
 
 app.post('/tasks', async (req, res) => {
-    const { title, isCompleted } = req.body;
+    const { error: validationError, value } = createSchema.validate(req.body);
 
-    if (!title) {
+    if (validationError) {
         return res.status(400).json({
-            message: 'We need a title'
+            message: validationError.details[0].message
         });
     }
+
+    const { title, isCompleted } = value;
 
     try {
         const result = await pool.query(
@@ -110,7 +123,15 @@ app.get('/tasks', async (req, res) => {
 
 app.put('/tasks/:id', async (req, res) => {
     const id = parseInt(req.params.id);
-    const { title, isCompleted } = req.body;
+    const { error: validationError, value } = updateSchema.validate(req.body);
+
+    if (validationError) {
+        return res.status(400).json({
+            message: validationError.details[0].message
+        });
+    }
+
+    const { title, isCompleted } = value;
 
     try {
         const result = await pool.query(
