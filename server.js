@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const Joi = require('joi');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173'
@@ -17,7 +17,8 @@ const pool = new Pool({
     port: process.env.DB_PORT,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    database: process.env.DB_NAME,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false
 });
 
 const assigneeRule = Joi.string()
