@@ -1,493 +1,178 @@
-# TP4 - Persistance des données avec PostgreSQL et Docker
+# Gestion des tâches : TP 5
 
-Ce projet consiste à intégrer une base de données PostgreSQL dans une API Node.js et à utiliser Docker pour lancer l'API et la base de données.
+Application de gestion de tâches pour une association comptant des bénévoles malvoyants.
 
-L'API permet de créer, consulter, modifier et supprimer des tâches.
+- **API** : Node.js, Express, PostgreSQL (Docker Compose), à la racine du dépôt.
+- **Interface** : React + Vite, dans le dossier `frontend`.
 
----
-
-## Prérequis
-
-Avant de lancer le projet, il faut avoir installé :
-
-- Docker Desktop
-- Git
-- Bruno pour tester l'API
-- DBeaver pour consulter la base PostgreSQL (optionnel)
+Chaque tâche a un titre, un statut (complétée ou non) et, facultativement, le **prénom** du bénévole qui s'en occupe.
 
 ---
 
-## Structure du projet
+## 1. Lancer le projet
 
-```text
-CDA_TP4/
-├── db-init/
-│   └── init.sql
-├── Dockerfile
-├── docker-compose.yml
-├── package.json
-├── package-lock.json
-├── server.js
+### Prérequis
+
+- Docker Desktop (démarré)
+- Node.js 20 ou plus récent
+
+### API et base de données
+
+À la racine du dépôt :
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Ouvrir `.env` et remplacer `changez-moi` par un mot de passe de votre choix, puis :
+
+```powershell
+docker compose up -d --build
+```
+
+L'API répond sur <http://localhost:3000/tasks>.
+
+> PostgreSQL ne lit les identifiants et `db-init/init.sql` qu'à la création de la base. Après les avoir modifiés :
+> `docker compose down -v` puis `docker compose up -d --build` (les données de test sont recréées).
+
+### Interface
+
+Dans le dossier `frontend` :
+
+```powershell
+Copy-Item .env.example .env
+npm install
+npm run dev
+```
+
+L'application tourne sur <http://localhost:5173>.
+
+### Vérifications utiles
+
+```powershell
+npm run lint                       # dans frontend : aucune erreur
+docker compose logs api            # aucun contenu de requête dans les logs
+docker compose exec api whoami     # doit répondre : node
+```
+
+### Variables d'environnement
+
+| Fichier | Variable | Rôle |
+|---|---|---|
+| `.env` (racine) | `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Identifiants PostgreSQL, lus par Docker Compose |
+| `frontend/.env` | `VITE_API_URL` | URL de l'API (seule variable du frontend) |
+
+Les fichiers `.env` ne sont jamais commités. Les fichiers `.env.example` (racine et `frontend`) contiennent des valeurs fictives.
+
+---
+
+## 2. Structure du dépôt
+
+```
+.
+├── db-init/init.sql        schéma et données fictives
+├── frontend/               interface React + Vite
+├── server.js               API Express
+├── Dockerfile              image de l'API (utilisateur non-root)
+├── docker-compose.yml      API + PostgreSQL
+├── .env.example
 └── README.md
 ```
 
----
+## 3. Routes de l'API
 
-# 1. Installation du projet
-
-Cloner le projet GitHub :
-
-```bash
-git clone https://github.com/TON-PSEUDO/CDA_TP4.git
-```
-
-Entrer dans le dossier :
-
-```bash
-cd CDA_TP4
-```
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/tasks` | Liste des tâches |
+| GET | `/tasks?status=completed` ou `uncompleted` | Liste filtrée |
+| POST | `/tasks` | Ajoute une tâche (`title` obligatoire, `assignee` facultatif) |
+| PUT | `/tasks/:id` | Modifie `title`, `isCompleted` et/ou `assignee` |
+| PATCH | `/tasks/:id/completed` | Inverse le statut |
+| DELETE | `/tasks/:id/assignee` | Retire le prénom du bénévole sans supprimer la tâche |
+| DELETE | `/tasks/:id` | Supprime la tâche (et donc son prénom) |
 
 ---
 
-# 2. Construire et lancer Docker
+## 4. Accessibilité
 
-Le projet utilise deux conteneurs :
+Mesures mises en place : `lang="fr"` et titre de page explicite, structure sémantique (`header`, `main`, un seul `h1`, liste `ul`/`li`), labels visibles reliés aux champs, vrais boutons avec nom explicite, statut par case à cocher, focus clavier visible, messages `role="status"` (succès) et `role="alert"` (erreurs), erreurs de saisie reliées aux champs par `aria-describedby`, contrastes d'au moins 4,5:1. Le plugin `eslint-plugin-jsx-a11y` est actif : `npm run lint` ne signale aucune erreur.
 
-- `api` : l'API Node.js / Express
-- `db` : la base de données PostgreSQL
+### Lighthouse (Accessibilité)
 
-Pour construire les images Docker :
+Score : **100 / 100**
 
-```bash
-docker compose build
-```
+![Lighthouse](docs/lighthouse.png)
 
-Pour démarrer les conteneurs :
+### WAVE
 
-```bash
-docker compose up -d
-```
+Aucune erreur signalée.
 
-Ou pour construire et démarrer directement :
+![WAVE](docs/wave.png)
 
-```bash
-docker compose up -d --build
-```
+### Parcours au clavier
 
-Cette dernière commande est recommandée après une modification du code de l'API.
+Ajouter, cocher, filtrer, retirer un bénévole et supprimer une tâche fonctionnent avec Tab, Entrée et Espace.
 
 ---
 
-# 3. Vérifier que les conteneurs fonctionnent
+## 5. Sécurité
 
-Exécuter :
+- **Secrets hors du code** : identifiants PostgreSQL dans un `.env` à la racine, lus par Docker Compose (y compris dans le `healthcheck`). Aucun `.env` n'est commité.
+- **Aucun secret dans le frontend** : seule `VITE_API_URL` est utilisée.
+- **CORS** : l'API n'accepte que l'origine du frontend (`CORS_ORIGIN`, par défaut `http://localhost:5173`), jamais `*`.
+- **Validation** : le titre est contrôlé dans le formulaire (obligatoire, 255 caractères au plus) et par l'API avec Joi, qui contrôle aussi le prénom.
+- **XSS** : les titres sont affichés par React comme du texte. Une tâche nommée `<img src=x onerror=alert(1)>` s'affiche telle quelle, sans exécution. `dangerouslySetInnerHTML` n'est jamais utilisé.
+- **Docker** : l'API tourne avec `USER node` (pas en root). Un `.dockerignore` évite de copier `.env` et `frontend` dans l'image.
 
-```bash
-docker compose ps
-```
+### npm audit
 
-Les deux services doivent être affichés avec le statut `Up`.
+| Dossier | Résultat |
+|---|---|
+| Racine (API) | `found 0 vulnerabilities` |
+| `frontend` | `found 0 vulnerabilities` |
 
-Exemple :
+![npm audit](docs/npm-audit.png)
 
-```text
-NAME            SERVICE   STATUS
-cda_tp4-api-1   api       Up
-cda_tp4-db-1    db        Up
-```
-
-Les ports utilisés sont :
-
-```text
-API        : localhost:3000
-PostgreSQL : localhost:5432
-```
+> Le dossier `frontend` contient un fichier `.npmrc` (`legacy-peer-deps=true`). `eslint-plugin-jsx-a11y` déclare encore une compatibilité jusqu'à ESLint 9, alors que le projet Vite utilise ESLint 10. Le plugin fonctionne correctement avec cette version.
 
 ---
 
-# 4. Consulter les logs
+## 6. RGPD : fiche du traitement
 
-Pour voir les logs de l'API :
+| Rubrique | Description |
+|---|---|
+| **Responsable du traitement** | L'association (contact : contact@association.example) |
+| **Finalité** | Savoir quel bénévole s'occupe de chaque tâche |
+| **Base légale** | Intérêt légitime de l'association à organiser ses activités |
+| **Données collectées** | Uniquement le **prénom** du bénévole (facultatif, 50 caractères au plus, lettres uniquement). Ni nom de famille, ni e-mail, ni téléphone. |
+| **Durée de conservation** | Tant que la tâche existe. Le prénom est supprimé en même temps que la tâche. |
+| **Personnes ayant accès** | Les membres de l'association qui utilisent l'application et les administrateurs de la base de données. L'application n'a pas d'authentification : l'accès doit être limité au réseau de l'association. |
+| **Destinataires** | Aucun tiers. Aucune donnée n'est transmise à un service externe. |
+| **Traceurs** | Aucun (pas de statistiques, de publicité ni de script tiers) |
+| **Journaux** | L'API n'écrit jamais le contenu des requêtes dans ses logs |
+| **Droits des bénévoles** | Accès, rectification, effacement, opposition |
+| **Exercer ses droits** | Par e-mail à contact@association.example. L'effacement peut aussi être fait directement dans l'application avec le bouton « Retirer le bénévole ». En cas de désaccord, une réclamation peut être déposée auprès de la CNIL (cnil.fr). |
 
-```bash
-docker compose logs api
-```
-
-Pour voir les logs de PostgreSQL :
-
-```bash
-docker compose logs db
-```
-
-Pour suivre les logs en temps réel :
-
-```bash
-docker compose logs -f
-```
+Les données de départ de `init.sql` utilisent des prénoms **inventés** : aucune donnée réelle n'est présente dans le dépôt.
 
 ---
 
-# 5. Tester l'API
+## 7. Questions
 
-L'API est accessible à l'adresse :
+**Pourquoi aucune variable `VITE_` ne contient de secret ?**
+Vite recopie toutes les variables qui commencent par `VITE_` en clair dans le JavaScript envoyé au navigateur. Ce code est téléchargé par chaque visiteur, qui peut le lire avec les outils de développement. Un mot de passe ou une clé placés dans une variable `VITE_` seraient donc publics. `VITE_API_URL` ne contient que l'URL de l'API, qui n'est pas secrète. Les identifiants PostgreSQL restent dans le `.env` de la racine, lu uniquement par Docker Compose et par l'API.
 
-```text
-http://localhost:3000
-```
+**Pourquoi la validation du frontend ne suffit pas ?**
+Le contrôle du formulaire (titre obligatoire, 255 caractères au plus) guide l'utilisateur, mais il s'exécute dans le navigateur, que l'utilisateur maîtrise. Il peut être contourné en modifiant la page ou en appelant directement l'API (Bruno, `curl`, script). Seul le contrôle côté serveur, ici avec Joi, protège réellement les données : l'API refuse toute requête invalide, d'où qu'elle vienne.
 
-Les tests peuvent être effectués avec Bruno.
-
-## Vérifier que l'API fonctionne
-
-Méthode :
-
-```text
-GET
-```
-
-URL :
-
-```text
-http://localhost:3000/
-```
-
-Réponse attendue :
-
-```json
-{
-  "message": "bravo"
-}
-```
+**Pourquoi l'application n'a-t-elle pas besoin de bandeau cookies ?**
+L'application n'utilise aucun cookie ni traceur : pas d'outil de statistiques, pas de pixel publicitaire, pas de script tiers. Un bandeau de consentement n'est requis que pour déposer ou lire des traceurs qui ne sont pas strictement nécessaires au service. Ici, il n'y en a aucun, donc rien à consentir.
 
 ---
 
-# 6. Créer une tâche
-
-Méthode :
-
-```text
-POST
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks
-```
-
-Dans Bruno, sélectionner :
-
-```text
-Body → JSON
-```
-
-Puis envoyer :
-
-```json
-{
-  "title": "Faire le TP",
-  "isCompleted": false
-}
-```
-
-Réponse attendue :
-
-```json
-{
-  "message": "task created",
-  "newTask": {
-    "id": 1,
-    "title": "Faire le TP",
-    "isCompleted": false
-  }
-}
-```
-
----
-
-# 7. Récupérer toutes les tâches
-
-Méthode :
-
-```text
-GET
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks
-```
-
-Cette requête retourne toutes les tâches enregistrées dans PostgreSQL.
-
----
-
-# 8. Récupérer les tâches terminées
-
-Méthode :
-
-```text
-GET
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks?status=completed
-```
-
-Cette requête retourne uniquement les tâches dont `isCompleted` vaut `true`.
-
----
-
-# 9. Récupérer les tâches non terminées
-
-Méthode :
-
-```text
-GET
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks?status=uncompleted
-```
-
-Cette requête retourne uniquement les tâches dont `isCompleted` vaut `false`.
-
----
-
-# 10. Modifier une tâche
-
-Méthode :
-
-```text
-PUT
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks/1
-```
-
-Body JSON :
-
-```json
-{
-  "title": "Faire le TP PostgreSQL",
-  "isCompleted": true
-}
-```
-
-La tâche ayant l'identifiant `1` est alors modifiée.
-
----
-
-# 11. Changer le statut d'une tâche
-
-Méthode :
-
-```text
-PATCH
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks/1/completed
-```
-
-Aucun Body n'est nécessaire.
-
-Cette requête inverse le statut de la tâche :
-
-```text
-false → true
-```
-
-ou :
-
-```text
-true → false
-```
-
----
-
-# 12. Supprimer une tâche
-
-Méthode :
-
-```text
-DELETE
-```
-
-URL :
-
-```text
-http://localhost:3000/tasks/1
-```
-
-La tâche ayant l'identifiant `1` est supprimée de PostgreSQL.
-
----
-
-# 13. Vérifier les données dans PostgreSQL avec DBeaver
-
-DBeaver peut être utilisé pour vérifier directement les données enregistrées dans PostgreSQL.
-
-Créer une connexion PostgreSQL avec :
-
-```text
-Host     : localhost
-Port     : 5432
-Database : tasks
-Username : admin
-Password : admin
-```
-
-Une fois connecté, aller dans :
-
-```text
-tasks
-└── Schemas
-    └── public
-        └── Tables
-            └── tasks
-```
-
-Pour afficher les données, exécuter :
-
-```sql
-SELECT * FROM tasks;
-```
-
----
-
-# 14. Arrêter le projet
-
-Pour arrêter les conteneurs sans supprimer les données :
-
-```bash
-docker compose down
-```
-
-Les données PostgreSQL sont conservées dans le volume Docker.
-
-Pour relancer le projet :
-
-```bash
-docker compose up -d
-```
-
----
-
-# 15. Reconstruire l'API après une modification
-
-Si le code de `server.js` ou le `Dockerfile` a été modifié, utiliser :
-
-```bash
-docker compose up -d --build
-```
-
-Cela reconstruit l'image de l'API puis redémarre les services.
-
----
-
-# 16. Réinitialiser complètement la base de données
-
-⚠️ Cette commande supprime le volume PostgreSQL et donc les données enregistrées dans la base.
-
-```bash
-docker compose down -v
-```
-
-Puis :
-
-```bash
-docker compose up -d --build
-```
-
-Le fichier `db-init/init.sql` est alors exécuté lors de l'initialisation de la nouvelle base.
-
----
-
-# 17. Commandes Docker utiles
-
-Voir les conteneurs :
-
-```bash
-docker compose ps
-```
-
-Voir tous les conteneurs, même ceux qui sont arrêtés :
-
-```bash
-docker compose ps -a
-```
-
-Voir les logs de l'API :
-
-```bash
-docker compose logs api
-```
-
-Voir les logs de PostgreSQL :
-
-```bash
-docker compose logs db
-```
-
-Arrêter les conteneurs :
-
-```bash
-docker compose down
-```
-
-Construire les images :
-
-```bash
-docker compose build
-```
-
-Construire et démarrer :
-
-```bash
-docker compose up -d --build
-```
-
----
-
-# 18. Résumé du lancement
-
-Pour lancer rapidement le projet après l'avoir cloné :
-
-```bash
-git clone https://github.com/TON-PSEUDO/CDA_TP4.git
-cd CDA_TP4
-docker compose up -d --build
-docker compose ps
-```
-
-Puis :
-
-```text
-API        → http://localhost:3000
-PostgreSQL → localhost:5432
-```
-
-Les requêtes API peuvent ensuite être envoyées depuis Bruno.
-
----
-
-## Technologies utilisées
-
-- Node.js
-- Express
-- PostgreSQL
-- Docker
-- Docker Compose
-- Bruno
-- DBeaver
+## 8. Bonus : déploiement
+
+| Service | URL |
+|---|---|
+| API (Fly.io) | _non déployé_ |
+| Interface (Netlify) | _non déployé_ |

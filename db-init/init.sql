@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 INSERT INTO tasks (title, "isCompleted", assignee) VALUES
-    ('Réviser Git', false, 'Nathan'),
-    ('Passer son rattrapage', false, 'Thomas'),
-    ('Trouver une alternance', true, 'Théo'),
+    ('Réviser Git', false, 'Cassidy'),
+    ('Passer son rattrapage', false, 'Pharah'),
+    ('Trouver une alternance', true, 'Moira'),
     ('Ranger son ordinateur', false, NULL);
