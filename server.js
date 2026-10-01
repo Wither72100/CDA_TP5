@@ -20,14 +20,21 @@ const pool = new Pool({
     database: process.env.DB_NAME
 });
 
+const assigneeRule = Joi.string()
+    .trim()
+    .max(50)
+    .pattern(/^\p{L}[\p{L}'’ -]*$/u);
+
 const createSchema = Joi.object({
     title: Joi.string().trim().min(1).max(255).required(),
-    isCompleted: Joi.boolean()
+    isCompleted: Joi.boolean(),
+    assignee: assigneeRule.empty('').allow(null).default(null)
 });
 
 const updateSchema = Joi.object({
     title: Joi.string().trim().min(1).max(255),
-    isCompleted: Joi.boolean()
+    isCompleted: Joi.boolean(),
+    assignee: assigneeRule
 }).min(1);
 
 app.get('/', (req, res) => {
@@ -45,14 +52,14 @@ app.post('/tasks', async (req, res) => {
         });
     }
 
-    const { title, isCompleted } = value;
+    const { title, isCompleted, assignee } = value;
 
     try {
         const result = await pool.query(
-            `INSERT INTO tasks (title, "isCompleted")
-            VALUES ($1, $2)
+            `INSERT INTO tasks (title, "isCompleted", assignee)
+            VALUES ($1, $2, $3)
             RETURNING *`,
-            [title, isCompleted ?? false]
+            [title, isCompleted ?? false, assignee]
         );
 
         res.status(201).json({
@@ -131,16 +138,17 @@ app.put('/tasks/:id', async (req, res) => {
         });
     }
 
-    const { title, isCompleted } = value;
+    const { title, isCompleted, assignee } = value;
 
     try {
         const result = await pool.query(
             `UPDATE tasks
             SET title = COALESCE($1, title),
-                "isCompleted" = COALESCE($2, "isCompleted")
-            WHERE id = $3
+                "isCompleted" = COALESCE($2, "isCompleted"),
+                assignee = COALESCE($3, assignee)
+            WHERE id = $4
             RETURNING *`,
-            [title, isCompleted, id]
+            [title, isCompleted, assignee, id]
         );
 
         if (result.rows.length === 0) {
@@ -212,6 +220,37 @@ app.patch('/tasks/:id/completed', async (req, res) => {
 
         res.json({
             message: 'task status toggled',
+            task: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            message: 'Database error'
+        });
+    }
+});
+
+app.delete('/tasks/:id/assignee', async (req, res) => {
+    const id = parseInt(req.params.id);
+
+    try {
+        const result = await pool.query(
+            `UPDATE tasks
+            SET assignee = NULL
+            WHERE id = $1
+            RETURNING *`,
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                message: 'task not found'
+            });
+        }
+
+        res.json({
+            message: 'assignee removed',
             task: result.rows[0]
         });
 

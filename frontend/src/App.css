@@ -68,6 +68,7 @@ button:hover {
 }
 
 #title-error,
+#assignee-error,
 [role='alert'] {
   color: var(--danger);
   font-weight: 600;
@@ -117,4 +118,18 @@ li label {
   font-weight: 400;
   color: var(--text-h);
   overflow-wrap: anywhere;
+}
+
+.privacy {
+  max-width: 520px;
+  font-size: 15px;
+}
+
+.privacy a {
+  color: var(--accent);
+}
+
+.assignee {
+  color: var(--text);
+  font-size: 15px;
 }
