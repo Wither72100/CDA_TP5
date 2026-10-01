@@ -147,7 +147,7 @@ Ajouter, cocher, filtrer, retirer un bénévole et supprimer une tâche fonction
 | **Données collectées** | Uniquement le **prénom** du bénévole (facultatif, 50 caractères au plus, lettres uniquement). Ni nom de famille, ni e-mail, ni téléphone. |
 | **Durée de conservation** | Tant que la tâche existe. Le prénom est supprimé en même temps que la tâche. |
 | **Personnes ayant accès** | Les membres de l'association qui utilisent l'application et les administrateurs de la base de données. L'application n'a pas d'authentification : l'accès doit être limité au réseau de l'association. |
-| **Destinataires** | Aucun tiers. Aucune donnée n'est transmise à un service externe. |
+| **Destinataires** | Aucun tiers ne reçoit les données à ses propres fins. En version locale, tout reste sur la machine. En version déployée (bonus), la base est hébergée par Neon et l'API par Render, en qualité de sous-traitants techniques. |
 | **Traceurs** | Aucun (pas de statistiques, de publicité ni de script tiers) |
 | **Journaux** | L'API n'écrit jamais le contenu des requêtes dans ses logs |
 | **Droits des bénévoles** | Accès, rectification, effacement, opposition |
@@ -172,7 +172,20 @@ L'application n'utilise aucun cookie ni traceur : pas d'outil de statistiques, p
 
 ## 8. Bonus : déploiement
 
-| Service | URL |
-|---|---|
-| API (Fly.io) | _non déployé_ |
-| Interface (Netlify) | _non déployé_ |
+| Élément | Service | URL |
+|---|---|---|
+| API | Render (service web Docker, offre gratuite) | https://tp5-tasks-api.onrender.com |
+| Interface | Netlify | https://spiffy-stardust-e70cb3.netlify.app |
+| Base de données | Neon (PostgreSQL hébergé, connexion chiffrée) | non publique |
+
+Fly.io, cité dans le sujet, n'a plus d'offre gratuite : l'API est donc hébergée sur Render, selon le même principe (image Docker + variables secrètes).
+
+- **Secrets** : `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL` et `CORS_ORIGIN` sont saisis dans l'onglet *Environment* de Render. Ils ne sont écrits dans aucun fichier du dépôt.
+- **Base** : le script `db-init/init.sql` a été exécuté dans l'éditeur SQL de Neon. L'API se connecte en SSL (`DB_SSL=true`).
+- **Netlify** : base `frontend`, commande `npm run build`, dossier publié `frontend/dist`, variable `VITE_API_URL` = URL de l'API (sans `/` final).
+- **CORS en production** : `CORS_ORIGIN` contient uniquement l'URL du site Netlify.
+- **Limite de l'offre gratuite** : l'API se met en veille après quelques minutes d'inactivité. La première requête suivante est lente, il suffit de recharger la page.
+
+### Lighthouse sur la version en ligne
+
+![Lighthouse en ligne](docs/lighthouse-online.png)
